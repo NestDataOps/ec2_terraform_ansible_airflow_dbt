@@ -82,6 +82,7 @@ resource "aws_instance" "airflow_server" {
 
   # Attach the security group defined above
   vpc_security_group_ids = [aws_security_group.airflow_sg.id]
+
   user_data = <<-EOF
               #!/bin/bash
               set -e
@@ -109,42 +110,42 @@ resource "aws_instance" "airflow_server" {
               # Configure Git safe directory for airflow user
               sudo -u airflow git config --global --add safe.directory /opt/airflow/repo
 
-              # 4. Create Virtual Environment & Install Packages
-              sudo -u airflow bash -c '
-                cd /opt/airflow
-                python3 -m venv airflow_env
-                source airflow_env/bin/activate
+              # 4. Create Virtual Environment & Install Packages as Airflow User
+              sudo -u airflow bash << 'BUILD_ENV'
+              cd /opt/airflow
+              python3 -m venv airflow_env
+              source airflow_env/bin/activate
 
-                pip install --upgrade pip setuptools wheel
+              pip install --upgrade pip setuptools wheel
 
-                AIRFLOW_VERSION=2.8.1
-                PYTHON_VERSION=$$(python3 --version | cut -d " " -f 2 | cut -d "." -f 1-2)
-                CONSTRAINT_URL="https://raw.githubusercontent.com/apache/airflow/constraints-$${AIRFLOW_VERSION}/constraints-$${PYTHON_VERSION}.txt"
+              AIRFLOW_VERSION=2.8.1
+              PYTHON_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+              CONSTRAINT_URL="https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-${PYTHON_VERSION}.txt"
 
-                # Step A: Install Airflow and Airflow Providers with constraints
-                pip install "apache-airflow==$${AIRFLOW_VERSION}" \
-                  apache-airflow-providers-amazon \
-                  apache-airflow-providers-snowflake \
-                  pandas \
-                  plotly \
-                  --constraint "$${CONSTRAINT_URL}"
+              # Step A: Install Airflow and Airflow Providers with constraints
+              pip install "apache-airflow==${AIRFLOW_VERSION}" \
+                apache-airflow-providers-amazon \
+                apache-airflow-providers-snowflake \
+                pandas \
+                plotly \
+                --constraint "${CONSTRAINT_URL}"
 
-                # Step B: Install dbt separately without constraints to resolve conflicts
-                pip install dbt-core dbt-snowflake
+              # Step B: Install dbt separately without constraints to resolve conflicts
+              pip install dbt-core dbt-snowflake
 
-                # Step C: Initialize Airflow Database and Create Admin User
-                export AIRFLOW_HOME=/opt/airflow
-                export AIRFLOW__CORE__LOAD_EXAMPLES=False
+              # Step C: Initialize Airflow Database and Create Admin User
+              export AIRFLOW_HOME=/opt/airflow
+              export AIRFLOW__CORE__LOAD_EXAMPLES=False
 
-                airflow db init
-                airflow users create \
-                  --username admin \
-                  --firstname Admin \
-                  --lastname User \
-                  --role Admin \
-                  --email admin@example.com \
-                  --password admin
-              '
+              airflow db init
+              airflow users create \
+                --username admin \
+                --firstname Admin \
+                --lastname User \
+                --role Admin \
+                --email admin@example.com \
+                --password admin
+BUILD_ENV
 
               # 5. Create System-Wide Symlink for dbt CLI
               ln -sf /opt/airflow/airflow_env/bin/dbt /usr/local/bin/dbt
@@ -175,7 +176,6 @@ resource "aws_instance" "airflow_server" {
 
               (crontab -u airflow -l 2>/dev/null; echo "*/5 * * * * git -C /opt/airflow/repo pull > /dev/null 2>&1") | crontab -u airflow -
               EOF
-
   tags = {
     Name = "Airflow-K3s-Server"
   }

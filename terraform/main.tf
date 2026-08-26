@@ -84,7 +84,14 @@ resource "aws_instance" "airflow_server" {
   vpc_security_group_ids = [aws_security_group.airflow_sg.id]
   user_data              = <<-EOF
               #!/bin/bash
-              set -e
+              # Send ALL output (stdout+stderr) to a dedicated log file, in addition to
+              # cloud-init's own logging, and echo every command as it runs (-x).
+              # If this script ever fails again, `sudo cat /var/log/user-data.log`
+              # will show exactly which line ran last.
+              exec > /var/log/user-data.log 2>&1
+              set -ex
+
+              echo "=== user-data script started at $(date -u) ==="
 
               # 1. Install System Dependencies
               apt-get update -y
@@ -112,7 +119,7 @@ resource "aws_instance" "airflow_server" {
               # 4. Create Setup Script for Airflow User
               cat << 'SETUP_ENV' > /opt/airflow/setup_env.sh
               #!/bin/bash
-              set -e
+              set -ex
 
               cd /opt/airflow
               python3 -m venv airflow_env
@@ -183,6 +190,8 @@ SETUP_ENV
               systemctl start airflow
 
               (crontab -u airflow -l 2>/dev/null; echo "*/5 * * * * git -C /opt/airflow/repo pull > /dev/null 2>&1") | crontab -u airflow -
+
+              echo "=== user-data script completed successfully at $(date -u) ==="
               EOF
 
   tags = {

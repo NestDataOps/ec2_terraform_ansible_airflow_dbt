@@ -84,15 +84,12 @@ resource "aws_instance" "airflow_server" {
   vpc_security_group_ids = [aws_security_group.airflow_sg.id]
   user_data = <<-EOF
               #!/bin/bash
-              # Install K3s
               curl -sfL https://get.k3s.io | sh -
               
-              # Set up kubeconfig
               mkdir -p /home/ubuntu/.kube
               cp /etc/rancher/k3s/k3s.yaml /home/ubuntu/.kube/config
               chown -R ubuntu:ubuntu /home/ubuntu/.kube
 
-              # Auto-deploy Airflow via K3s Helm Controller
               mkdir -p /var/lib/rancher/k3s/server/manifests/
               cat << 'MANIFEST' > /var/lib/rancher/k3s/server/manifests/airflow.yaml
               apiVersion: helm.cattle.io/v1
@@ -105,6 +102,13 @@ resource "aws_instance" "airflow_server" {
                 repo: https://airflow.apache.org
                 targetNamespace: airflow
                 createNamespace: true
+                valuesContent: |
+                  webserver:
+                    service:
+                      type: LoadBalancer
+                      ports:
+                        - name: airflw-sq-target
+                          port: 8080
               MANIFEST
               EOF
 

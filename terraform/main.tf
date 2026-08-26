@@ -84,53 +84,29 @@ resource "aws_instance" "airflow_server" {
   vpc_security_group_ids = [aws_security_group.airflow_sg.id]
   user_data              = <<-EOF
               #!/bin/bash
-              set -e
-
-              # 1. Install System Dependencies
+              # Update packages and install Python dependencies
               apt-get update -y
-              apt-get install -y python3-pip python3-venv sqlite3 git
+              apt-get install -y python3-pip python3-venv sqlite3
 
-              # 2. Setup Dedicated Airflow User
+              # Create dedicated airflow user and directory
               useradd -m -s /bin/bash airflow
               mkdir -p /opt/airflow
               chown -R airflow:airflow /opt/airflow
 
-              # 3. Clone Repository & Symlink Directories
-              git clone https://github.com/NestDataOps/airflow-dbt-snowflake-japan-visa.git /opt/airflow/repo
-              chown -R airflow:airflow /opt/airflow/repo
-              
-              # Symlink DAGs and dbt folders
-              ln -s /opt/airflow/repo/dags /opt/airflow/dags
-              ln -s /opt/airflow/repo/japan_visa_dbt /opt/airflow/japan_visa_dbt
-              chown -h airflow:airflow /opt/airflow/dags /opt/airflow/japan_visa_dbt
-
-              # Configure Git safe directory for airflow user
-              sudo -u airflow git config --global --add safe.directory /opt/airflow/repo
-
-              # 4. Install Python Virtual Environment & Packages
+              # Set up Python venv and install Airflow
               sudo -u airflow bash -c '
                 cd /opt/airflow
                 python3 -m venv airflow_env
                 source airflow_env/bin/activate
                 
-                pip install --upgrade pip setuptools wheel
-
+                # Install Airflow using official constraint files
                 AIRFLOW_VERSION=2.8.1
                 PYTHON_VERSION=$(python3 --version | cut -d " " -f 2 | cut -d "." -f 1-2)
                 CONSTRAINT_URL="https://raw.githubusercontent.com/apache/airflow/constraints-$${AIRFLOW_VERSION}/constraints-$${PYTHON_VERSION}.txt"
+                pip install "apache-airflow==$${AIRFLOW_VERSION}" --constraint "$${CONSTRAINT_URL}"
                 
-                pip install "apache-airflow==$${AIRFLOW_VERSION}" \
-                  apache-airflow-providers-amazon \
-                  apache-airflow-providers-snowflake \
-                  pandas \
-                  plotly \
-                  dbt-core \
-                  dbt-snowflake \
-                  --constraint "$${CONSTRAINT_URL}"
-
+                # Initialize DB and create admin user
                 export AIRFLOW_HOME=/opt/airflow
-                export AIRFLOW__CORE__LOAD_EXAMPLES=False
-                
                 airflow db init
                 airflow users create \
                     --username admin \
@@ -141,10 +117,7 @@ resource "aws_instance" "airflow_server" {
                     --password admin
               '
 
-              # 5. Create System Symlink for dbt CLI
-              ln -s /opt/airflow/airflow_env/bin/dbt /usr/local/bin/dbt
-
-              # 6. Create Systemd Service
+              # Create systemd service for Standalone Airflow (Webserver + Scheduler)
               cat << 'SERVICE' > /etc/systemd/system/airflow.service
               [Unit]
               Description=Airflow Standalone Daemon
@@ -154,7 +127,6 @@ resource "aws_instance" "airflow_server" {
               User=airflow
               Group=airflow
               Environment="AIRFLOW_HOME=/opt/airflow"
-              Environment="PATH=/opt/airflow/airflow_env/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
               ExecStart=/opt/airflow/airflow_env/bin/airflow standalone
               Restart=always
               RestartSec=5s
@@ -163,11 +135,10 @@ resource "aws_instance" "airflow_server" {
               WantedBy=multi-user.target
               SERVICE
 
-              # 7. Start Airflow & Enable Git Auto-Pull Cron
+              # Start and enable service
               systemctl daemon-reload
               systemctl enable airflow
               systemctl start airflow
-
               EOF
 
   tags = {

@@ -104,12 +104,12 @@ resource "aws_instance" "airflow_server" {
                 PYTHON_VERSION=$(python3 --version | cut -d " " -f 2 | cut -d "." -f 1-2)
                 CONSTRAINT_URL="https://raw.githubusercontent.com/apache/airflow/constraints-$${AIRFLOW_VERSION}/constraints-$${PYTHON_VERSION}.txt"
                 # Step A: Airflow + providers, constrained
-                pip install "apache-airflow==${AIRFLOW_VERSION}" \
+                pip install "apache-airflow==$${AIRFLOW_VERSION}" \
                   apache-airflow-providers-amazon \
                   apache-airflow-providers-snowflake \
                   pandas \
                   plotly \
-                  --constraint "${CONSTRAINT_URL}"
+                  --constraint "$${CONSTRAINT_URL}"
                 
                 # Step B: dbt, unconstrained — let it pick its own compatible deps
                 pip install dbt-core dbt-snowflake 

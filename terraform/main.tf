@@ -2,21 +2,23 @@ variable "key_name" {
   description = "Name of the existing EC2 Key Pair in AWS"
   type        = string
   # You can set a default here, or pass it via TF_VAR_key_name in GitHub Actions
-  default = "damsteele66-us-east-1" 
+  default = "damsteele66-us-east-1"
 }
 
-variable "vpc_id" {
-  description = "The ID of the VPC where the instance will be deployed"
-  type        = string
-  # Optional: If deploying to the default VPC, you can omit this variable 
-  # and the vpc_id argument in the security group.
-}
+variable "private_key" { type = string }
+
+#variable "vpc_id" {
+#  description = "The ID of the VPC where the instance will be deployed"
+#  type        = string
+# Optional: If deploying to the default VPC, you can omit this variable 
+# and the vpc_id argument in the security group.
+#}
 
 # 1. Security Group Configuration
 resource "aws_security_group" "airflow_sg" {
   name        = "airflow-k3s-sg"
   description = "Security group for K3s and Airflow"
-  vpc_id      = var.vpc_id 
+  vpc_id      = var.vpc_id
 
   # SSH - Required for GitHub Actions to fetch the kubeconfig
   ingress {
@@ -58,11 +60,11 @@ resource "aws_security_group" "airflow_sg" {
 # 2. EC2 Instance Configuration
 resource "aws_instance" "airflow_server" {
   # Ubuntu 22.04 LTS (Make sure to update this AMI ID for your specific AWS region)
-  ami           = "ami-0c7217cdde317cfec" 
+  ami           = "ami-0c7217cdde317cfec"
   instance_type = "t3.large"
-  
+
   # Reference the existing Key Pair here
-  key_name      = var.key_name 
+  key_name = var.key_name
 
   # Attach the security group defined above
   vpc_security_group_ids = [aws_security_group.airflow_sg.id]

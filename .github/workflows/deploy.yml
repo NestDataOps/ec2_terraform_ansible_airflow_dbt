@@ -11,6 +11,10 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform  # Points all run steps to the terraform directory
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -29,12 +33,10 @@ jobs:
         run: terraform init
 
       - name: Set SSH Key
-        # Terraform needs this key to grab the kubeconfig file
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          # Pass the private key content to Terraform via TF_VAR
           echo "TF_VAR_private_key=${{ secrets.SSH_PRIVATE_KEY }}" >> $GITHUB_ENV
 
       - name: Terraform Plan

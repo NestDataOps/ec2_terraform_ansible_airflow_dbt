@@ -7,6 +7,10 @@ variable "key_name" {
 
 variable "private_key" { type = string }
 
+data "aws_vpc" "default" {
+  default = true
+}
+
 #variable "vpc_id" {
 #  description = "The ID of the VPC where the instance will be deployed"
 #  type        = string
@@ -18,7 +22,7 @@ variable "private_key" { type = string }
 resource "aws_security_group" "airflow_sg" {
   name        = "airflow-k3s-sg"
   description = "Security group for K3s and Airflow"
-  vpc_id      = var.vpc_id
+  vpc_id      = data.aws_vpc.default.id
 
   # SSH - Required for GitHub Actions to fetch the kubeconfig
   ingress {

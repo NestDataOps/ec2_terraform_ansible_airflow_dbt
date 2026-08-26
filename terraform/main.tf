@@ -1,3 +1,13 @@
+terraform {
+  required_version = ">= 1.0"
+
+  backend "s3" {
+    bucket = "github-actions-terraform-822872386722-us-east-1-an"
+    key    = "k3_ec2_terraform_state/ec2.tfstate"
+    region = "us-east-1"
+  }
+}
+
 variable "key_name" {
   description = "Name of the existing EC2 Key Pair in AWS"
   type        = string

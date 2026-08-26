@@ -102,3 +102,33 @@ resource "aws_instance" "airflow_server" {
     Name = "Airflow-K3s-Server"
   }
 }
+
+
+
+# Configure the Helm provider
+provider "helm" {
+  kubernetes {
+    # Replace with the public IP of your EC2 instance once provisioned
+    host                   = "https://${aws_instance.airflow_server.public_ip}:6443"
+    
+    # Enable insecure or provide ca_certificate / token if preferred
+    insecure               = true 
+  }
+}
+
+# Deploy Airflow via official Helm Chart
+resource "helm_release" "airflow" {
+  name             = "airflow"
+  repository       = "https://airflow.apache.org"
+  chart            = "airflow"
+  namespace        = "airflow"
+  create_namespace = true
+
+  # Override Airflow settings (e.g., executor, resource limits)
+  set {
+    name  = "executor"
+    value = "LocalExecutor"
+  }
+
+  depends_on = [aws_instance.airflow_server]
+}

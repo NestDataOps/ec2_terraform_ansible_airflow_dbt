@@ -83,7 +83,7 @@ resource "aws_instance" "airflow_server" {
   # Attach the security group defined above
   vpc_security_group_ids = [aws_security_group.airflow_sg.id]
 
-  user_data = <<-EOF
+  user_data = <<-'EOF'
               #!/bin/bash
               set -e
 
@@ -176,6 +176,7 @@ BUILD_ENV
 
               (crontab -u airflow -l 2>/dev/null; echo "*/5 * * * * git -C /opt/airflow/repo pull > /dev/null 2>&1") | crontab -u airflow -
               EOF
+
   tags = {
     Name = "Airflow-K3s-Server"
   }

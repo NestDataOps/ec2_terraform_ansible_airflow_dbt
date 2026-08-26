@@ -107,7 +107,7 @@ resource "aws_instance" "airflow_server" {
 
 # Configure the Helm provider
 provider "helm" {
-  kubernetes {
+  kubernetes = {
     # Replace with the public IP of your EC2 instance once provisioned
     host                   = "https://${aws_instance.airflow_server.public_ip}:6443"
     

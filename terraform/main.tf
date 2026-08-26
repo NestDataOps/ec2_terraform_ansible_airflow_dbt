@@ -84,32 +84,61 @@ resource "aws_instance" "airflow_server" {
   vpc_security_group_ids = [aws_security_group.airflow_sg.id]
   user_data = <<-EOF
               #!/bin/bash
-              curl -sfL https://get.k3s.io | sh -
-              
-              mkdir -p /home/ubuntu/.kube
-              cp /etc/rancher/k3s/k3s.yaml /home/ubuntu/.kube/config
-              chown -R ubuntu:ubuntu /home/ubuntu/.kube
+              # Update packages and install Python dependencies
+              apt-get update -y
+              apt-get install -y python3-pip python3-venv sqlite3
 
-              mkdir -p /var/lib/rancher/k3s/server/manifests/
-              cat << 'MANIFEST' > /var/lib/rancher/k3s/server/manifests/airflow.yaml
-              apiVersion: helm.cattle.io/v1
-              kind: HelmChart
-              metadata:
-                name: airflow
-                namespace: kube-system
-              spec:
-                chart: airflow
-                repo: https://airflow.apache.org
-                targetNamespace: airflow
-                createNamespace: true
-                valuesContent: |
-                  webserver:
-                    service:
-                      type: LoadBalancer
-                      ports:
-                        - name: airflw-sq-target
-                          port: 8080
-              MANIFEST
+              # Create dedicated airflow user and directory
+              useradd -m -s /bin/bash airflow
+              mkdir -p /opt/airflow
+              chown -R airflow:airflow /opt/airflow
+
+              # Set up Python venv and install Airflow
+              sudo -u airflow bash -c '
+                cd /opt/airflow
+                python3 -m venv airflow_env
+                source airflow_env/bin/activate
+                
+                # Install Airflow using official constraint files
+                AIRFLOW_VERSION=2.8.1
+                PYTHON_VERSION=$(python3 --version | cut -d " " -f 2 | cut -d "." -f 1-2)
+                CONSTRAINT_URL="https://raw.githubusercontent.com/apache/airflow/constraints-$${AIRFLOW_VERSION}/constraints-$${PYTHON_VERSION}.txt"
+                pip install "apache-airflow==$${AIRFLOW_VERSION}" --constraint "$${CONSTRAINT_URL}"
+                
+                # Initialize DB and create admin user
+                export AIRFLOW_HOME=/opt/airflow
+                airflow db init
+                airflow users create \
+                    --username admin \
+                    --firstname Admin \
+                    --lastname User \
+                    --role Admin \
+                    --email admin@example.com \
+                    --password admin
+              '
+
+              # Create systemd service for Standalone Airflow (Webserver + Scheduler)
+              cat << 'SERVICE' > /etc/systemd/system/airflow.service
+              [Unit]
+              Description=Airflow Standalone Daemon
+              After=network.target
+
+              [Service]
+              User=airflow
+              Group=airflow
+              Environment="AIRFLOW_HOME=/opt/airflow"
+              ExecStart=/opt/airflow/airflow_env/bin/airflow standalone
+              Restart=always
+              RestartSec=5s
+
+              [Install]
+              WantedBy=multi-user.target
+              SERVICE
+
+              # Start and enable service
+              systemctl daemon-reload
+              systemctl enable airflow
+              systemctl start airflow
               EOF
 
   tags = {

@@ -83,7 +83,7 @@ resource "aws_instance" "airflow_server" {
   # Attach the security group defined above
   vpc_security_group_ids = [aws_security_group.airflow_sg.id]
 
-  user_data = <<-'EOF'
+  user_data = <<-EOF
               #!/bin/bash
               set -e
 
@@ -120,15 +120,15 @@ resource "aws_instance" "airflow_server" {
 
               AIRFLOW_VERSION=2.8.1
               PYTHON_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-              CONSTRAINT_URL="https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-${PYTHON_VERSION}.txt"
+              CONSTRAINT_URL="https://raw.githubusercontent.com/apache/airflow/constraints-$${AIRFLOW_VERSION}/constraints-$${PYTHON_VERSION}.txt"
 
               # Step A: Install Airflow and Airflow Providers with constraints
-              pip install "apache-airflow==${AIRFLOW_VERSION}" \
+              pip install "apache-airflow==$${AIRFLOW_VERSION}" \
                 apache-airflow-providers-amazon \
                 apache-airflow-providers-snowflake \
                 pandas \
                 plotly \
-                --constraint "${CONSTRAINT_URL}"
+                --constraint "$${CONSTRAINT_URL}"
 
               # Step B: Install dbt separately without constraints to resolve conflicts
               pip install dbt-core dbt-snowflake
@@ -176,6 +176,7 @@ BUILD_ENV
 
               (crontab -u airflow -l 2>/dev/null; echo "*/5 * * * * git -C /opt/airflow/repo pull > /dev/null 2>&1") | crontab -u airflow -
               EOF
+
 
   tags = {
     Name = "Airflow-K3s-Server"

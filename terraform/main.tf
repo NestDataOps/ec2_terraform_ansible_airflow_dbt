@@ -127,6 +127,7 @@ resource "aws_instance" "airflow_server" {
               User=airflow
               Group=airflow
               Environment="AIRFLOW_HOME=/opt/airflow"
+              Environment="PATH=/opt/airflow/airflow_env/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
               ExecStart=/opt/airflow/airflow_env/bin/airflow standalone
               Restart=always
               RestartSec=5s

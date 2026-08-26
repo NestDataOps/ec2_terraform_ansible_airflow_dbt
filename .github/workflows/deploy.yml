@@ -3,6 +3,7 @@ name: Deploy K3s and Airflow
 on:
   push:
     branches: [ "main" ]
+    paths: [ 'terraform/**' ]
 
 env:
   AWS_REGION: us-east-1

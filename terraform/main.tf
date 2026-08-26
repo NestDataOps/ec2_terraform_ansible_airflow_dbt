@@ -122,15 +122,15 @@ resource "aws_instance" "airflow_server" {
 
               AIRFLOW_VERSION=2.8.1
               PYTHON_VERSION=$(python3 -c "import sys; print(str(sys.version_info.major) + '.' + str(sys.version_info.minor))")
-              CONSTRAINT_URL="https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-${PYTHON_VERSION}.txt"
+              CONSTRAINT_URL="https://raw.githubusercontent.com/apache/airflow/constraints-$${AIRFLOW_VERSION}/constraints-$${PYTHON_VERSION}.txt"
 
               # Step A: Install Airflow and Airflow Providers with constraints
-              pip install "apache-airflow==${AIRFLOW_VERSION}" \
+              pip install "apache-airflow==$${AIRFLOW_VERSION}" \
                 apache-airflow-providers-amazon \
                 apache-airflow-providers-snowflake \
                 pandas \
                 plotly \
-                --constraint "${CONSTRAINT_URL}"
+                --constraint "$${CONSTRAINT_URL}"
 
               # Step B: Install dbt separately without constraints
               pip install dbt-core dbt-snowflake

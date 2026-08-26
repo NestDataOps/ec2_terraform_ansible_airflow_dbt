@@ -82,20 +82,30 @@ resource "aws_instance" "airflow_server" {
 
   # Attach the security group defined above
   vpc_security_group_ids = [aws_security_group.airflow_sg.id]
-
   user_data = <<-EOF
               #!/bin/bash
               # Install K3s
               curl -sfL https://get.k3s.io | sh -
               
-              # Set up kubeconfig for the 'ubuntu' user
+              # Set up kubeconfig
               mkdir -p /home/ubuntu/.kube
               cp /etc/rancher/k3s/k3s.yaml /home/ubuntu/.kube/config
               chown -R ubuntu:ubuntu /home/ubuntu/.kube
-              
-              # Replace 127.0.0.1 with the instance's public IP so remote connections work
-              PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
-              sed -i "s/127.0.0.1/$PUBLIC_IP/g" /home/ubuntu/.kube/config
+
+              # Auto-deploy Airflow via K3s Helm Controller
+              mkdir -p /var/lib/rancher/k3s/server/manifests/
+              cat << 'MANIFEST' > /var/lib/rancher/k3s/server/manifests/airflow.yaml
+              apiVersion: helm.cattle.io/v1
+              kind: HelmChart
+              metadata:
+                name: airflow
+                namespace: kube-system
+              spec:
+                chart: airflow
+                repo: https://airflow.apache.org
+                targetNamespace: airflow
+                createNamespace: true
+              MANIFEST
               EOF
 
   tags = {
@@ -103,32 +113,3 @@ resource "aws_instance" "airflow_server" {
   }
 }
 
-
-
-# Configure the Helm provider
-provider "helm" {
-  kubernetes = {
-    # Replace with the public IP of your EC2 instance once provisioned
-    host                   = "https://${aws_instance.airflow_server.public_ip}:6443"
-    
-    # Enable insecure or provide ca_certificate / token if preferred
-    insecure               = true 
-  }
-}
-
-# Deploy Airflow via official Helm Chart
-resource "helm_release" "airflow" {
-  name             = "airflow"
-  repository       = "https://airflow.apache.org"
-  chart            = "airflow"
-  namespace        = "airflow"
-  create_namespace = true
-
-  # Override Airflow settings (e.g., executor, resource limits)
-  set {
-    name  = "executor"
-    value = "LocalExecutor"
-  }
-
-  depends_on = [aws_instance.airflow_server]
-}

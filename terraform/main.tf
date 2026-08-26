@@ -91,15 +91,17 @@ resource "aws_instance" "airflow_server" {
               apt-get install -y python3-pip python3-venv sqlite3 git
 
               # 2. Setup Dedicated Airflow User
-              useradd -m -s /bin/bash airflow
+              useradd -m -s /bin/bash airflow || true
               mkdir -p /opt/airflow
               chown -R airflow:airflow /opt/airflow
 
               # 3. Clone Repository & Symlink Directories
+              rm -rf /opt/airflow/repo
               git clone https://github.com/NestDataOps/airflow-dbt-snowflake-japan-visa.git /opt/airflow/repo
               chown -R airflow:airflow /opt/airflow/repo
-              
-              # Symlink DAGs and dbt folders
+
+              # Remove default/existing dags if present and build symlinks
+              rm -rf /opt/airflow/dags /opt/airflow/japan_visa_dbt
               ln -s /opt/airflow/repo/dags /opt/airflow/dags
               ln -s /opt/airflow/repo/japan_visa_dbt /opt/airflow/japan_visa_dbt
               chown -h airflow:airflow /opt/airflow/dags /opt/airflow/japan_visa_dbt
@@ -107,44 +109,47 @@ resource "aws_instance" "airflow_server" {
               # Configure Git safe directory for airflow user
               sudo -u airflow git config --global --add safe.directory /opt/airflow/repo
 
-              # 4. Install Python Virtual Environment & Packages
+              # 4. Create Virtual Environment & Install Packages
               sudo -u airflow bash -c '
                 cd /opt/airflow
                 python3 -m venv airflow_env
                 source airflow_env/bin/activate
-                
+
                 pip install --upgrade pip setuptools wheel
 
                 AIRFLOW_VERSION=2.8.1
-                PYTHON_VERSION=$(python3 --version | cut -d " " -f 2 | cut -d "." -f 1-2)
+                PYTHON_VERSION=$$(python3 --version | cut -d " " -f 2 | cut -d "." -f 1-2)
                 CONSTRAINT_URL="https://raw.githubusercontent.com/apache/airflow/constraints-$${AIRFLOW_VERSION}/constraints-$${PYTHON_VERSION}.txt"
-                
+
+                # Step A: Install Airflow and Airflow Providers with constraints
                 pip install "apache-airflow==$${AIRFLOW_VERSION}" \
                   apache-airflow-providers-amazon \
                   apache-airflow-providers-snowflake \
                   pandas \
                   plotly \
-                  dbt-core \
-                  dbt-snowflake \
                   --constraint "$${CONSTRAINT_URL}"
 
+                # Step B: Install dbt separately without constraints to resolve conflicts
+                pip install dbt-core dbt-snowflake
+
+                # Step C: Initialize Airflow Database and Create Admin User
                 export AIRFLOW_HOME=/opt/airflow
                 export AIRFLOW__CORE__LOAD_EXAMPLES=False
-                
+
                 airflow db init
                 airflow users create \
-                    --username admin \
-                    --firstname Admin \
-                    --lastname User \
-                    --role Admin \
-                    --email admin@example.com \
-                    --password admin
+                  --username admin \
+                  --firstname Admin \
+                  --lastname User \
+                  --role Admin \
+                  --email admin@example.com \
+                  --password admin
               '
 
-              # 5. Create System Symlink for dbt CLI
-              ln -s /opt/airflow/airflow_env/bin/dbt /usr/local/bin/dbt
+              # 5. Create System-Wide Symlink for dbt CLI
+              ln -sf /opt/airflow/airflow_env/bin/dbt /usr/local/bin/dbt
 
-              # 6. Create Systemd Service
+              # 6. Create Systemd Service File
               cat << 'SERVICE' > /etc/systemd/system/airflow.service
               [Unit]
               Description=Airflow Standalone Daemon
@@ -163,11 +168,12 @@ resource "aws_instance" "airflow_server" {
               WantedBy=multi-user.target
               SERVICE
 
-              # 7. Start Airflow & Enable Git Auto-Pull Cron
+              # 7. Reload Systemd, Enable Service, and Setup Auto-Pull Cron Job
               systemctl daemon-reload
               systemctl enable airflow
               systemctl start airflow
 
+              (crontab -u airflow -l 2>/dev/null; echo "*/5 * * * * git -C /opt/airflow/repo pull > /dev/null 2>&1") | crontab -u airflow -
               EOF
 
   tags = {

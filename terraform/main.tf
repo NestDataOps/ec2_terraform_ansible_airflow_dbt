@@ -103,7 +103,14 @@ resource "aws_instance" "airflow_server" {
                 AIRFLOW_VERSION=2.8.1
                 PYTHON_VERSION=$(python3 --version | cut -d " " -f 2 | cut -d "." -f 1-2)
                 CONSTRAINT_URL="https://raw.githubusercontent.com/apache/airflow/constraints-$${AIRFLOW_VERSION}/constraints-$${PYTHON_VERSION}.txt"
-                pip install "apache-airflow==$${AIRFLOW_VERSION}" --constraint "$${CONSTRAINT_URL}"
+                pip install "apache-airflow==$${AIRFLOW_VERSION}" \
+                  apache-airflow-providers-amazon \
+                  apache-airflow-providers-snowflake \
+                  pandas \
+                  plotly \
+                  dbt-core \
+                  dbt-snowflake \
+                  --constraint "$${CONSTRAINT_URL}"
                 
                 # Initialize DB and create admin user
                 export AIRFLOW_HOME=/opt/airflow

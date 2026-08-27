@@ -3,6 +3,12 @@ name: Destroy Infrastructure
 on:
   workflow_dispatch: # Allows manual trigger from GitHub UI
 
+env:
+  AWS_REGION: us-east-1
+  TF_VAR_snowflake_password: ${{ secrets.SNOWFLAKE_PASSWORD }}
+  TF_VAR_airflow_aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  TF_VAR_airflow_aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
 jobs:
   destroy:
     runs-on: ubuntu-latest

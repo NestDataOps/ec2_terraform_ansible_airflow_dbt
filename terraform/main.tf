@@ -17,6 +17,59 @@ variable "key_name" {
 
 variable "private_key" { type = string }
 
+# --- Snowflake connection details (for the Airflow 'snowflake_default' connection) ---
+variable "snowflake_account" {
+  description = "Snowflake account identifier"
+  type        = string
+  default     = "IQFGCYU-UA55363"
+}
+
+variable "snowflake_warehouse" {
+  description = "Snowflake warehouse"
+  type        = string
+  default     = "japan_visa_wh"
+}
+
+variable "snowflake_database" {
+  description = "Snowflake database"
+  type        = string
+  default     = "japan_visa_db"
+}
+
+variable "snowflake_role" {
+  description = "Snowflake role"
+  type        = string
+  default     = "accountadmin"
+}
+
+variable "snowflake_login" {
+  description = "Snowflake login/username"
+  type        = string
+  default     = "NESTDATAOPS"
+}
+
+variable "snowflake_password" {
+  description = "Snowflake password. Pass via TF_VAR_snowflake_password in GitHub Actions (sourced from a repo secret)."
+  type        = string
+  sensitive   = true
+}
+
+# --- AWS credentials for the Airflow 'aws_default' connection ---
+# NOTE: these are separate from the AWS credentials GitHub Actions uses to
+# run `terraform apply` itself (configure-aws-credentials step). These are
+# the credentials DAGs will use at runtime (e.g. via S3Hook, boto3, etc).
+variable "airflow_aws_access_key_id" {
+  description = "AWS access key ID for Airflow's aws_default connection. Pass via TF_VAR_airflow_aws_access_key_id."
+  type        = string
+  sensitive   = true
+}
+
+variable "airflow_aws_secret_access_key" {
+  description = "AWS secret access key for Airflow's aws_default connection. Pass via TF_VAR_airflow_aws_secret_access_key."
+  type        = string
+  sensitive   = true
+}
+
 data "aws_vpc" "default" {
   default = true
 }
@@ -82,7 +135,7 @@ resource "aws_instance" "airflow_server" {
 
   # Attach the security group defined above
   vpc_security_group_ids = [aws_security_group.airflow_sg.id]
-  user_data              = <<-EOF
+  user_data = <<-EOF
 #!/bin/bash
 exec > /var/log/user-data.log 2>&1
 set -ex
@@ -143,9 +196,35 @@ sudo -u airflow bash -c '
       --lastname User \
       --role Admin \
       --email admin@example.com \
-      --password admin
-'
+      --password 77jump88
 
+  # Configure Airflow connections for Snowflake and AWS.
+  # Secrets are base64-passed from Terraform variables and decoded here so
+  # arbitrary characters in the password/keys never have to be shell-quoted.
+  SNOWFLAKE_PASSWORD=$(echo "${base64encode(var.snowflake_password)}" | base64 -d)
+  AWS_ACCESS_KEY_ID=$(echo "${base64encode(var.airflow_aws_access_key_id)}" | base64 -d)
+  AWS_SECRET_ACCESS_KEY=$(echo "${base64encode(var.airflow_aws_secret_access_key)}" | base64 -d)
+  SNOWFLAKE_EXTRA=$(echo "${base64encode(jsonencode({
+  account   = var.snowflake_account
+  warehouse = var.snowflake_warehouse
+  database  = var.snowflake_database
+  role      = var.snowflake_role
+}))}" | base64 -d)
+
+  airflow connections delete "snowflake_default" 2>/dev/null || true
+  airflow connections add "snowflake_default" \
+    --conn-type "snowflake" \
+    --conn-login "${var.snowflake_login}" \
+    --conn-password "$SNOWFLAKE_PASSWORD" \
+    --conn-extra "$SNOWFLAKE_EXTRA"
+
+  airflow connections delete "aws_default" 2>/dev/null || true
+  airflow connections add "aws_default" \
+    --conn-type "aws" \
+    --conn-login "$AWS_ACCESS_KEY_ID" \
+    --conn-password "$AWS_SECRET_ACCESS_KEY" \
+    --conn-extra "{\"region_name\": \"us-east-1\"}"
+'
 
 # Create systemd service for Standalone Airflow (Webserver + Scheduler)
 cat << 'SERVICE' > /etc/systemd/system/airflow.service
@@ -175,8 +254,8 @@ systemctl start airflow
 echo "=== user-data script completed successfully at $(date -u) ==="
   EOF
 
-  tags = {
-    Name = "Airflow-K3s-Server"
-  }
+tags = {
+  Name = "Airflow-K3s-Server"
+}
 }
 

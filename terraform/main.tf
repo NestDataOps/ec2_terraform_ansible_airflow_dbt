@@ -146,6 +146,7 @@ sudo -u airflow bash -c '
       --password admin
 '
 
+
 # Create systemd service for Standalone Airflow (Webserver + Scheduler)
 cat << 'SERVICE' > /etc/systemd/system/airflow.service
 [Unit]

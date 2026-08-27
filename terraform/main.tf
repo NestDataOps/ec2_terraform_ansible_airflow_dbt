@@ -224,6 +224,19 @@ sudo -u airflow bash -c '
     --conn-login "$AWS_ACCESS_KEY_ID" \
     --conn-password "$AWS_SECRET_ACCESS_KEY" \
     --conn-extra "{\"region_name\": \"us-east-1\"}"
+
+  # Write a dbt env file (used by profiles.yml via env_var()). Kept out of
+  # git; generated at boot from the same Terraform-managed secret.
+  cat > /opt/airflow/dbt.env << DBTENV
+DBT_SNOWFLAKE_PASSWORD=$SNOWFLAKE_PASSWORD
+SNOWFLAKE_ACCOUNT=${var.snowflake_account}
+SNOWFLAKE_USER=${var.snowflake_login}
+SNOWFLAKE_ROLE=${var.snowflake_role}
+SNOWFLAKE_DATABASE=${var.snowflake_database}
+SNOWFLAKE_WAREHOUSE=${var.snowflake_warehouse}
+DBT_PROFILES_DIR=/opt/airflow/japan_visa_dbt
+DBTENV
+  chmod 600 /opt/airflow/dbt.env
 '
 
 # Create systemd service for Standalone Airflow (Webserver + Scheduler)
@@ -238,6 +251,7 @@ Group=airflow
 Environment="AIRFLOW_HOME=/opt/airflow"
 Environment="AIRFLOW__CORE__LOAD_EXAMPLES=False"
 Environment="PATH=/opt/airflow/airflow_env/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+EnvironmentFile=/opt/airflow/dbt.env
 ExecStart=/opt/airflow/airflow_env/bin/airflow standalone
 Restart=always
 RestartSec=5s

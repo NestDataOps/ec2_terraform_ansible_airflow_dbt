@@ -16,6 +16,9 @@ jobs:
       run:
         working-directory: terraform
     env:
+      TF_VAR_snowflake_password: ${{ secrets.SNOWFLAKE_PASSWORD }}
+      TF_VAR_airflow_aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      TF_VAR_airflow_aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       TF_VAR_key_name: ${{ secrets.EC2_KEY_NAME }}
       TF_VAR_private_key: ${{ secrets.EC2_PRIVATE_KEY }}
       TF_IN_AUTOMATION: "true"

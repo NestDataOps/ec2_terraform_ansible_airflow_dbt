@@ -24,6 +24,7 @@
           - python3-venv
           - sqlite3
           - git
+          - acl # required for become_user to work correctly on Linux targets
         update_cache: true
         state: present
 

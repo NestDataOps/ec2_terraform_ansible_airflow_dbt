@@ -37,7 +37,13 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          echo "TF_VAR_private_key=${{ secrets.SSH_PRIVATE_KEY }}" >> $GITHUB_ENV
+
+          # $GITHUB_ENV only supports single-line KEY=VALUE by default; a
+          # private key is multi-line, so it must use the delimiter syntax.
+          DELIM=$(openssl rand -hex 8)
+          echo "TF_VAR_private_key<<$DELIM" >> "$GITHUB_ENV"
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" >> "$GITHUB_ENV"
+          echo "$DELIM" >> "$GITHUB_ENV"
 
       - name: Validate SSH key format
         run: |

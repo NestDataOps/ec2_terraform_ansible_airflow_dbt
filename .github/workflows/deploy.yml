@@ -35,9 +35,18 @@ jobs:
       - name: Set SSH Key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           echo "TF_VAR_private_key=${{ secrets.SSH_PRIVATE_KEY }}" >> $GITHUB_ENV
+
+      - name: Validate SSH key format
+        run: |
+          if ssh-keygen -y -f ~/.ssh/id_rsa > /dev/null 2>&1; then
+            echo "SSH key parses correctly."
+          else
+            echo "::error::~/.ssh/id_rsa is not a valid private key. Check the SSH_PRIVATE_KEY secret contains the full key (BEGIN/END lines included) with no extra encoding."
+            exit 1
+          fi
 
       - name: Terraform Plan
         run: terraform plan
@@ -76,6 +85,7 @@ jobs:
       - name: Write dynamic inventory
         working-directory: ${{ github.workspace }}
         run: |
+          mkdir -p ansible
           cat > ansible/inventory.ini << EOF
           [airflow_server]
           ${{ steps.tf_output.outputs.public_ip }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_rsa

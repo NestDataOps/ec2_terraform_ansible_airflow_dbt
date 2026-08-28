@@ -1,0 +1,232 @@
+---
+- name: Provision Airflow + dbt on EC2
+  hosts: airflow_server
+  become: true
+  vars:
+    airflow_home: /opt/airflow
+    airflow_version: "2.8.1"
+    snowflake_account: "IQFGCYU-UA55363"
+    snowflake_warehouse: "japan_visa_wh"
+    snowflake_database: "japan_visa_db"
+    snowflake_role: "accountadmin"
+    snowflake_login: "NESTDATAOPS"
+    # Secrets — passed in via --extra-vars from the GitHub Actions workflow,
+    # sourced from repo secrets. Never hardcode these.
+    snowflake_password: "{{ lookup('env', 'SNOWFLAKE_PASSWORD') }}"
+    airflow_aws_access_key_id: "{{ lookup('env', 'AIRFLOW_AWS_ACCESS_KEY_ID') }}"
+    airflow_aws_secret_access_key: "{{ lookup('env', 'AIRFLOW_AWS_SECRET_ACCESS_KEY') }}"
+
+  tasks:
+    - name: Install system dependencies
+      apt:
+        name:
+          - python3-pip
+          - python3-venv
+          - sqlite3
+          - git
+        update_cache: true
+        state: present
+
+    - name: Create dedicated airflow user
+      user:
+        name: airflow
+        shell: /bin/bash
+        create_home: true
+
+    - name: Ensure airflow home directory exists and is owned by airflow
+      file:
+        path: "{{ airflow_home }}"
+        state: directory
+        owner: airflow
+        group: airflow
+
+    - name: Clone the DAGs/dbt repo
+      git:
+        repo: https://github.com/NestDataOps/airflow-dbt-snowflake-japan-visa.git
+        dest: "{{ airflow_home }}/repo"
+        force: true
+      become_user: airflow
+
+    - name: Mark repo as a safe directory for the airflow user
+      command: git config --global --add safe.directory {{ airflow_home }}/repo
+      become_user: airflow
+      changed_when: false
+
+    - name: Remove any pre-existing dags/dbt paths before symlinking
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ airflow_home }}/dags"
+        - "{{ airflow_home }}/japan_visa_dbt"
+
+    - name: Symlink dags directory from repo
+      file:
+        src: "{{ airflow_home }}/repo/dags"
+        dest: "{{ airflow_home }}/dags"
+        state: link
+        owner: airflow
+        group: airflow
+
+    - name: Symlink japan_visa_dbt directory from repo
+      file:
+        src: "{{ airflow_home }}/repo/japan_visa_dbt"
+        dest: "{{ airflow_home }}/japan_visa_dbt"
+        state: link
+        owner: airflow
+        group: airflow
+
+    - name: Create Python virtual environment
+      command: python3 -m venv {{ airflow_home }}/airflow_env
+      args:
+        creates: "{{ airflow_home }}/airflow_env/bin/activate"
+      become_user: airflow
+
+    - name: Get installed Python version (for the Airflow constraints URL)
+      command: "{{ airflow_home }}/airflow_env/bin/python3 --version"
+      register: python_version_raw
+      changed_when: false
+
+    - name: Set python_version fact (e.g. 3.10)
+      set_fact:
+        python_version: "{{ python_version_raw.stdout.split(' ')[1].split('.')[0:2] | join('.') }}"
+
+    - name: Install Airflow + providers (constrained)
+      pip:
+        name:
+          - "apache-airflow=={{ airflow_version }}"
+          - apache-airflow-providers-amazon
+          - apache-airflow-providers-snowflake
+          - pandas
+          - plotly
+        virtualenv: "{{ airflow_home }}/airflow_env"
+        extra_args: >-
+          --constraint https://raw.githubusercontent.com/apache/airflow/constraints-{{ airflow_version }}/constraints-{{ python_version }}.txt
+      become_user: airflow
+
+    - name: Install dbt (unconstrained — separate from Airflow's dependency set)
+      pip:
+        name:
+          - dbt-core
+          - dbt-snowflake
+        virtualenv: "{{ airflow_home }}/airflow_env"
+      become_user: airflow
+
+    - name: Initialize Airflow DB (idempotent — safe to re-run)
+      command: "{{ airflow_home }}/airflow_env/bin/airflow db init"
+      environment:
+        AIRFLOW_HOME: "{{ airflow_home }}"
+        AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      become_user: airflow
+      changed_when: false
+
+    - name: Create Airflow admin user (ignore failure if it already exists)
+      command: >
+        {{ airflow_home }}/airflow_env/bin/airflow users create
+        --username admin --firstname Admin --lastname User
+        --role Admin --email admin@example.com --password admin
+      environment:
+        AIRFLOW_HOME: "{{ airflow_home }}"
+      become_user: airflow
+      register: create_user
+      failed_when: create_user.rc != 0 and 'already exist' not in create_user.stderr
+      changed_when: create_user.rc == 0
+
+    - name: Remove any existing snowflake_default connection
+      command: "{{ airflow_home }}/airflow_env/bin/airflow connections delete snowflake_default"
+      environment:
+        AIRFLOW_HOME: "{{ airflow_home }}"
+      become_user: airflow
+      failed_when: false
+      changed_when: false
+
+    - name: Add snowflake_default Airflow connection
+      command: >
+        {{ airflow_home }}/airflow_env/bin/airflow connections add snowflake_default
+        --conn-type snowflake
+        --conn-login {{ snowflake_login }}
+        --conn-password {{ snowflake_password | quote }}
+        --conn-extra {{ snowflake_extra_json | quote }}
+      vars:
+        snowflake_extra_json: >-
+          {"account": "{{ snowflake_account }}", "warehouse": "{{ snowflake_warehouse }}",
+          "database": "{{ snowflake_database }}", "role": "{{ snowflake_role }}"}
+      environment:
+        AIRFLOW_HOME: "{{ airflow_home }}"
+      become_user: airflow
+      no_log: true
+      changed_when: true
+
+    - name: Remove any existing aws_default connection
+      command: "{{ airflow_home }}/airflow_env/bin/airflow connections delete aws_default"
+      environment:
+        AIRFLOW_HOME: "{{ airflow_home }}"
+      become_user: airflow
+      failed_when: false
+      changed_when: false
+
+    - name: Add aws_default Airflow connection
+      command: >
+        {{ airflow_home }}/airflow_env/bin/airflow connections add aws_default
+        --conn-type aws
+        --conn-login {{ airflow_aws_access_key_id | quote }}
+        --conn-password {{ airflow_aws_secret_access_key | quote }}
+        --conn-extra {{ '{"region_name": "us-east-1"}' | quote }}
+      environment:
+        AIRFLOW_HOME: "{{ airflow_home }}"
+      become_user: airflow
+      no_log: true
+      changed_when: true
+
+    - name: Write dbt env file (used by profiles.yml via env_var())
+      copy:
+        dest: "{{ airflow_home }}/dbt.env"
+        owner: airflow
+        group: airflow
+        mode: "0600"
+        content: |
+          DBT_SNOWFLAKE_PASSWORD={{ snowflake_password }}
+          SNOWFLAKE_ACCOUNT={{ snowflake_account }}
+          SNOWFLAKE_USER={{ snowflake_login }}
+          SNOWFLAKE_ROLE={{ snowflake_role }}
+          SNOWFLAKE_DATABASE={{ snowflake_database }}
+          SNOWFLAKE_WAREHOUSE={{ snowflake_warehouse }}
+          DBT_PROFILES_DIR={{ airflow_home }}/japan_visa_dbt
+      no_log: true
+
+    - name: Create systemd unit for Airflow standalone
+      copy:
+        dest: /etc/systemd/system/airflow.service
+        content: |
+          [Unit]
+          Description=Airflow Standalone Daemon
+          After=network.target
+
+          [Service]
+          User=airflow
+          Group=airflow
+          Environment="AIRFLOW_HOME={{ airflow_home }}"
+          Environment="AIRFLOW__CORE__LOAD_EXAMPLES=False"
+          Environment="PATH={{ airflow_home }}/airflow_env/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+          EnvironmentFile={{ airflow_home }}/dbt.env
+          ExecStart={{ airflow_home }}/airflow_env/bin/airflow standalone
+          Restart=always
+          RestartSec=5s
+
+          [Install]
+          WantedBy=multi-user.target
+      notify: reload and restart airflow
+
+    - name: Ensure airflow service is enabled and started
+      systemd:
+        name: airflow
+        enabled: true
+        state: started
+        daemon_reload: true
+
+  handlers:
+    - name: reload and restart airflow
+      systemd:
+        name: airflow
+        daemon_reload: true
+        state: restarted

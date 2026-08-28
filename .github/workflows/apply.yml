@@ -1,19 +1,24 @@
-name: Deploy K3s and Airflow
+name: Apply Infrastructure
 
 on:
-  push:
-    branches: [ "main" ]
-    paths: [ 'terraform/**' ]
+  workflow_dispatch:
 
 env:
   AWS_REGION: us-east-1
+  TF_VAR_snowflake_password: ${{ secrets.SNOWFLAKE_PASSWORD }}
+  TF_VAR_airflow_aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  TF_VAR_airflow_aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
 jobs:
-  deploy:
+  apply:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: terraform  # Points all run steps to the terraform directory
+        working-directory: terraform
+    env:
+      TF_VAR_key_name: ${{ secrets.EC2_KEY_NAME }}
+      TF_VAR_private_key: ${{ secrets.EC2_PRIVATE_KEY }}
+      TF_IN_AUTOMATION: "true"
 
     steps:
       - name: Checkout Code
@@ -24,28 +29,16 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: us-east-1
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
       - name: Terraform Init
-        run: terraform init
-
-      - name: Set SSH Key
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          echo "TF_VAR_private_key=${{ secrets.SSH_PRIVATE_KEY }}" >> $GITHUB_ENV
-
-      - name: Terraform Plan
-        run: terraform plan
+        run: terraform init -input=false
 
       - name: Terraform Apply
-        env:
-          TF_VAR_key_name: "damsteele66-us-east-1"
-        run: terraform apply -auto-approve
+        run: terraform apply -input=false -auto-approve
 
       - name: Get instance public IP
         id: tf_output
@@ -73,12 +66,17 @@ jobs:
       - name: Install Ansible
         run: pip install ansible
 
+      - name: Write SSH private key to file
+        run: |
+          echo "${{ secrets.EC2_PRIVATE_KEY }}" > /tmp/ec2_key.pem
+          chmod 600 /tmp/ec2_key.pem
+
       - name: Write dynamic inventory
         working-directory: ${{ github.workspace }}
         run: |
           cat > ansible/inventory.ini << EOF
           [airflow_server]
-          ${{ steps.tf_output.outputs.public_ip }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_rsa
+          ${{ steps.tf_output.outputs.public_ip }} ansible_user=ubuntu ansible_ssh_private_key_file=/tmp/ec2_key.pem
           EOF
 
       - name: Run Ansible playbook

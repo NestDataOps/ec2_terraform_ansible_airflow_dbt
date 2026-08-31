@@ -1,0 +1,22 @@
+services:
+  airflow:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: airflow
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      AIRFLOW_HOME: /opt/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      DBT_PROFILES_DIR: /opt/airflow/japan_visa_dbt
+    env_file:
+      - airflow.env
+    volumes:
+      - airflow_data:/opt/airflow
+      - ./repo/dags:/opt/airflow/dags
+      - ./repo/japan_visa_dbt:/opt/airflow/japan_visa_dbt
+
+volumes:
+  airflow_data:

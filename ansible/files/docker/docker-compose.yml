@@ -11,6 +11,13 @@ services:
       AIRFLOW_HOME: /opt/airflow
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
       DBT_PROFILES_DIR: /opt/airflow/japan_visa_dbt
+      # Tuned down for a 2GB (t3a.small) instance — defaults assume more RAM
+      AIRFLOW__WEBSERVER__WORKERS: "2"
+      AIRFLOW__CORE__PARALLELISM: "4"
+      AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: "4"
+      AIRFLOW__SCHEDULER__PARSING_PROCESSES: "1"
+    mem_limit: 1400m
+    mem_reservation: 900m
     env_file:
       - airflow.env
     volumes:

@@ -28,4 +28,9 @@ else
   echo "=== Airflow DB already exists, skipping init ==="
 fi
 
-exec airflow standalone
+# No triggerer — it's only needed for deferrable operators, which this
+# pipeline doesn't use, and it's a full extra process on a memory-constrained
+# instance. Scheduler runs in the background, webserver stays in the
+# foreground so the container's main process is the one Docker tracks.
+airflow scheduler &
+exec airflow webserver

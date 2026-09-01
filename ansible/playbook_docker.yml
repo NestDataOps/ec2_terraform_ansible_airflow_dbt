@@ -12,10 +12,6 @@
     snowflake_password: "{{ lookup('env', 'SNOWFLAKE_PASSWORD') }}"
     airflow_aws_access_key_id: "{{ lookup('env', 'AIRFLOW_AWS_ACCESS_KEY_ID') }}"
     airflow_aws_secret_access_key: "{{ lookup('env', 'AIRFLOW_AWS_SECRET_ACCESS_KEY') }}"
-    # Internal-only — Postgres has no port published to the host, so this
-    # never leaves the instance's private Docker network. Not treated as a
-    # sensitive GitHub secret for that reason.
-    postgres_password: "airflow_internal_pw"
 
   tasks:
     - name: Install Docker prerequisites
@@ -26,35 +22,6 @@
           - gnupg
           - git
         update_cache: true
-        state: present
-
-    - name: Check if swap file already exists
-      stat:
-        path: /swapfile
-      register: swapfile_stat
-
-    - name: Create 2GB swap file (t3a.small only has 2GB RAM — no swap risks OOM kills)
-      command: fallocate -l 2G /swapfile
-      when: not swapfile_stat.stat.exists
-
-    - name: Set swap file permissions
-      file:
-        path: /swapfile
-        mode: "0600"
-      when: not swapfile_stat.stat.exists
-
-    - name: Format swap file
-      command: mkswap /swapfile
-      when: not swapfile_stat.stat.exists
-
-    - name: Enable swap file
-      command: swapon /swapfile
-      when: not swapfile_stat.stat.exists
-
-    - name: Persist swap file in fstab
-      lineinfile:
-        path: /etc/fstab
-        line: "/swapfile none swap sw 0 0"
         state: present
 
     - name: Add Docker's official GPG key
@@ -97,10 +64,10 @@
         src: docker/Dockerfile
         dest: "{{ app_dir }}/Dockerfile"
 
-    - name: Copy init.sh
+    - name: Copy entrypoint.sh
       copy:
-        src: docker/init.sh
-        dest: "{{ app_dir }}/init.sh"
+        src: docker/entrypoint.sh
+        dest: "{{ app_dir }}/entrypoint.sh"
         mode: "0755"
 
     - name: Copy docker-compose.yml
@@ -127,12 +94,7 @@
           SNOWFLAKE_WAREHOUSE={{ snowflake_warehouse }}
           AIRFLOW_AWS_ACCESS_KEY_ID={{ airflow_aws_access_key_id }}
           AIRFLOW_AWS_SECRET_ACCESS_KEY={{ airflow_aws_secret_access_key }}
-          POSTGRES_PASSWORD={{ postgres_password }}
       no_log: true
-
-    - name: Clean up unused Docker images and build cache (keeps redeploys from filling the disk)
-      command: docker system prune -af
-      failed_when: false
 
     - name: Build and start the Airflow container
       command: docker compose up -d --build

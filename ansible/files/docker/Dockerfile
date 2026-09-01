@@ -12,9 +12,14 @@ RUN pip install --no-cache-dir \
 
 # Step B: dbt, unconstrained — kept in a separate layer so its own
 # dependency resolution never has to satisfy Airflow's constraint file
+# (this is the exact ResolutionImpossible issue from the venv setup)
 RUN pip install --no-cache-dir dbt-core dbt-snowflake
 
-COPY init.sh /init.sh
+ENV AIRFLOW__CORE__LOAD_EXAMPLES=False
+
+COPY entrypoint.sh /entrypoint.sh
 USER root
-RUN chmod +x /init.sh
+RUN chmod +x /entrypoint.sh
 USER airflow
+
+ENTRYPOINT ["/entrypoint.sh"]

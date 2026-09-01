@@ -21,7 +21,7 @@ data "aws_vpc" "default" {
   default = true
 }
 
-#variable "vpc_id" {
+#   variable "vpc_id" {
 #  description = "The ID of the VPC where the instance will be deployed"
 #  type        = string
 # Optional: If deploying to the default VPC, you can omit this variable 
@@ -75,14 +75,7 @@ resource "aws_security_group" "airflow_sg" {
 resource "aws_instance" "airflow_server" {
   # Ubuntu 22.04 LTS (Make sure to update this AMI ID for your specific AWS region)
   ami           = "ami-0c7217cdde317cfec"
-  instance_type = "t3a.medium"
-
-  # Default AMI root volume (often 8GB) is too small for the Airflow +
-  # Postgres image stack plus accumulated build layers across redeploys.
-  root_block_device {
-    volume_size = 30
-    volume_type = "gp3"
-  }
+  instance_type = "t3a.small"
 
   # Reference the existing Key Pair here
   key_name = var.key_name

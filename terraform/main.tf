@@ -77,6 +77,13 @@ resource "aws_instance" "airflow_server" {
   ami           = "ami-0c7217cdde317cfec"
   instance_type = "t3a.medium"
 
+  # Default AMI root volume (often 8GB) is too small for the Airflow +
+  # Postgres image stack plus accumulated build layers across redeploys.
+  root_block_device {
+    volume_size = 30
+    volume_type = "gp3"
+  }
+
   # Reference the existing Key Pair here
   key_name = var.key_name
 

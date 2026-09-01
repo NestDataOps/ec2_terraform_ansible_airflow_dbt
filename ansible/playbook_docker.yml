@@ -130,6 +130,10 @@
           POSTGRES_PASSWORD={{ postgres_password }}
       no_log: true
 
+    - name: Clean up unused Docker images and build cache (keeps redeploys from filling the disk)
+      command: docker system prune -af
+      failed_when: false
+
     - name: Build and start the Airflow container
       command: docker compose up -d --build
       args:

@@ -22,7 +22,7 @@ data "aws_vpc" "default" {
 }
 
 # variable "vpc_id" {
-#  description = "The ID of the VPC where the instance will be deployed"
+# description = "The ID of the VPC where the instance will be deployed"
 #  type        = string
 # Optional: If deploying to the default VPC, you can omit this variable 
 # and the vpc_id argument in the security group.

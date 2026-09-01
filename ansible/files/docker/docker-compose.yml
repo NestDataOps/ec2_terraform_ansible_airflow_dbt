@@ -11,6 +11,10 @@ services:
       AIRFLOW_HOME: /opt/airflow
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
       DBT_PROFILES_DIR: /opt/airflow/japan_visa_dbt
+      AIRFLOW__WEBSERVER__WORKERS: "2"
+      AIRFLOW__CORE__PARALLELISM: "8"
+      AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: "8"
+      AIRFLOW__SCHEDULER__PARSING_PROCESSES: "1"
     env_file:
       - airflow.env
     volumes:

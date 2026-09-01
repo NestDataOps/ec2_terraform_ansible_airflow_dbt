@@ -12,10 +12,6 @@
     snowflake_password: "{{ lookup('env', 'SNOWFLAKE_PASSWORD') }}"
     airflow_aws_access_key_id: "{{ lookup('env', 'AIRFLOW_AWS_ACCESS_KEY_ID') }}"
     airflow_aws_secret_access_key: "{{ lookup('env', 'AIRFLOW_AWS_SECRET_ACCESS_KEY') }}"
-    # Internal-only — Postgres has no port published to the host, so this
-    # never leaves the instance's private Docker network. Not treated as a
-    # sensitive GitHub secret for that reason.
-    postgres_password: "airflow_internal_pw"
 
   tasks:
     - name: Install Docker prerequisites
@@ -97,10 +93,10 @@
         src: docker/Dockerfile
         dest: "{{ app_dir }}/Dockerfile"
 
-    - name: Copy init.sh
+    - name: Copy entrypoint.sh
       copy:
-        src: docker/init.sh
-        dest: "{{ app_dir }}/init.sh"
+        src: docker/entrypoint.sh
+        dest: "{{ app_dir }}/entrypoint.sh"
         mode: "0755"
 
     - name: Copy docker-compose.yml
@@ -134,7 +130,6 @@
           SNOWFLAKE_WAREHOUSE={{ snowflake_warehouse }}
           AIRFLOW_AWS_ACCESS_KEY_ID={{ airflow_aws_access_key_id }}
           AIRFLOW_AWS_SECRET_ACCESS_KEY={{ airflow_aws_secret_access_key }}
-          POSTGRES_PASSWORD={{ postgres_password }}
       no_log: true
 
     - name: Clean up unused Docker images and build cache (keeps redeploys from filling the disk)

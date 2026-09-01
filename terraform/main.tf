@@ -3,7 +3,7 @@ terraform {
 
   backend "s3" {
     bucket = "github-actions-terraform-822872386722-us-east-1-an"
-    key    = "k3_ec2_terraform_state/ec2.tfstate"
+    key    = "ec2_terraform_state/ec2.tfstate"
     region = "us-east-1"
   }
 }
@@ -30,7 +30,7 @@ data "aws_vpc" "default" {
 
 # 1. Security Group Configuration
 resource "aws_security_group" "airflow_sg" {
-  name        = "airflow-k3s-sg"
+  name        = "airflow-docker-sg"
   description = "Security group for K3s and Airflow"
   vpc_id      = data.aws_vpc.default.id
 

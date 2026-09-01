@@ -1,29 +1,74 @@
+x-airflow-common: &airflow-common
+  build:
+    context: .
+    dockerfile: Dockerfile
+  environment: &airflow-common-env
+    AIRFLOW_HOME: /opt/airflow
+    AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:${POSTGRES_PASSWORD:-airflow}@postgres/airflow
+    DBT_PROFILES_DIR: /opt/airflow/japan_visa_dbt
+    AIRFLOW__WEBSERVER__WORKERS: "2"
+    AIRFLOW__CORE__PARALLELISM: "8"
+    AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: "8"
+    AIRFLOW__SCHEDULER__PARSING_PROCESSES: "2"
+  env_file:
+    - airflow.env
+  volumes:
+    - airflow_logs:/opt/airflow/logs
+    - ./repo/dags:/opt/airflow/dags
+    - ./repo/japan_visa_dbt:/opt/airflow/japan_visa_dbt
+
 services:
-  airflow:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: airflow
+  postgres:
+    image: postgres:15
+    container_name: airflow-postgres
     restart: unless-stopped
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-airflow}
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 10
+
+  airflow-init:
+    <<: *airflow-common
+    container_name: airflow-init
+    entrypoint: /bin/bash
+    command: ["-c", "/init.sh"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  webserver:
+    <<: *airflow-common
+    container_name: airflow-webserver
+    command: ["airflow", "webserver"]
     ports:
       - "8080:8080"
-    environment:
-      AIRFLOW_HOME: /opt/airflow
-      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
-      DBT_PROFILES_DIR: /opt/airflow/japan_visa_dbt
-      # Tuned down for a 2GB (t3a.small) instance — defaults assume more RAM
-      AIRFLOW__WEBSERVER__WORKERS: "1"
-      AIRFLOW__CORE__PARALLELISM: "4"
-      AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: "4"
-      AIRFLOW__SCHEDULER__PARSING_PROCESSES: "1"
-    mem_limit: 1400m
-    mem_reservation: 900m
-    env_file:
-      - airflow.env
-    volumes:
-      - airflow_data:/opt/airflow
-      - ./repo/dags:/opt/airflow/dags
-      - ./repo/japan_visa_dbt:/opt/airflow/japan_visa_dbt
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+
+  scheduler:
+    <<: *airflow-common
+    container_name: airflow-scheduler
+    command: ["airflow", "scheduler"]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
 
 volumes:
-  airflow_data:
+  postgres_data:
+  airflow_logs:

@@ -31,7 +31,7 @@ data "aws_vpc" "default" {
 # 1. Security Group Configuration
 resource "aws_security_group" "airflow_sg" {
   name        = "airflow-docker-sg"
-  description = "Security group for K3s and Airflow"
+  description = "Security group for Docker Airflow DBT"
   vpc_id      = data.aws_vpc.default.id
 
   # SSH - Required for GitHub Actions to fetch the kubeconfig
@@ -43,14 +43,14 @@ resource "aws_security_group" "airflow_sg" {
     cidr_blocks = ["0.0.0.0/0"] # Note: In production, restrict to specific IPs
   }
 
-  # Kubernetes API - Required for the Terraform Helm provider
-  ingress {
-    description = "Allow K3s API access"
-    from_port   = 6443
-    to_port     = 6443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+ # Kubernetes API - Required for the Terraform Helm provider
+ # ingress {
+ #   description = "Allow API access"
+ #   from_port   = 6443
+ #   to_port     = 6443
+ #   protocol    = "tcp"
+ #   cidr_blocks = ["0.0.0.0/0"]
+ # }
 
   # Airflow Web UI - Assuming NodePort or default port forwarding
   ingress {
@@ -61,7 +61,7 @@ resource "aws_security_group" "airflow_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # Outbound Internet Access - Required to download K3s, Airflow images, and Python packages
+  # Outbound Internet Access - Required to download Airflow images, and Python packages
   egress {
     description = "Allow all outbound traffic"
     from_port   = 0
@@ -94,7 +94,7 @@ echo "=== cloud-init boot complete, ready for Ansible at $(date -u) ==="
 EOF
 
   tags = {
-    Name = "Airflow-K3s-Server"
+    Name = "Airflow-Docker-Server"
   }
 }
 

@@ -5,7 +5,7 @@ set -e
 # container restarts (and `docker compose up` re-runs) idempotent.
 if [ ! -f "${AIRFLOW_HOME}/airflow.db" ]; then
   echo "=== First run: initializing Airflow DB and connections ==="
-  airflow db init
+  airflow db migrate
 
   airflow users create \
     --username admin --firstname Admin --lastname User \
@@ -28,4 +28,8 @@ else
   echo "=== Airflow DB already exists, skipping init ==="
 fi
 
-exec airflow standalone
+# No triggerer — only needed for deferrable operators, which this pipeline
+# doesn't use. Scheduler runs in the background, webserver stays in the
+# foreground so Docker tracks it as the container's main process.
+airflow scheduler &
+exec airflow webserver

@@ -19,7 +19,9 @@ RUN pip install --no-cache-dir \
 # dependency resolution never has to satisfy Airflow's constraint file
 RUN pip install --no-cache-dir dbt-core dbt-snowflake
 
-COPY init.sh /init.sh
+COPY entrypoint.sh /entrypoint.sh
 USER root
-RUN chmod +x /init.sh
+RUN chmod +x /entrypoint.sh
 USER airflow
+
+ENTRYPOINT ["/entrypoint.sh"]

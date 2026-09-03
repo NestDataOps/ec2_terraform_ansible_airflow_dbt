@@ -2,7 +2,9 @@ name: Deploy K3s and Airflow
 
 on:
   push:
-    branches: [ "main", "event-driven" ]
+    branches: 
+      - "main"
+      - "event-driven"
     paths: [ 'terraform/**' ]
 
 env:

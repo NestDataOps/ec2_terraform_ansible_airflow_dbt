@@ -203,13 +203,6 @@
         state: started
         daemon_reload: true
 
-    - name: Run Ansible Playbook
-      env:
-        ANSIBLE_SSH_RETRIES: "3"
-        ANSIBLE_SSH_ARGS: "-o ServerAliveInterval=30 -o ControlMaster=auto -o ControlPersist=60s"
-      run: |
-          ansible-playbook -i "${{ steps.terraform.outputs.public_ip }}," ansible/playbook.yml
-
   handlers:
     - name: reload and restart airflow
       systemd:

@@ -17,20 +17,6 @@
     airflow_aws_secret_access_key: "{{ lookup('env', 'AIRFLOW_AWS_SECRET_ACCESS_KEY') }}"
 
   tasks:
-    - name: Disable unattended-upgrades to prevent apt locks
-      systemd:
-        name: unattended-upgrades
-        state: stopped
-        enabled: false
-      become: true
-
-    - name: Wait for apt locks to be released
-      shell: |
-        while fuser /var/lib/dpkg/lock-frontend /var/lib/apt/lists/lock >/dev/null 2>&1; do
-          sleep 20
-        done
-      changed_when: false
-
     - name: Install system dependencies
       apt:
         name:

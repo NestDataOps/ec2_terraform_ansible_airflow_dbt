@@ -1,4 +1,3 @@
-# 2
 terraform {
   required_version = ">= 1.0"
 
@@ -75,8 +74,8 @@ resource "aws_security_group" "airflow_sg" {
 # 2. EC2 Instance Configuration
 resource "aws_instance" "airflow_server" {
   # Ubuntu 22.04 LTS (Make sure to update this AMI ID for your specific AWS region)
-  ami           = "ami-0b6d9d3d33ba97d99"
-  instance_type = "t3a.medium"
+  ami           = "ami-0c7217cdde317cfec"
+  instance_type = "t3a.small"
 
   # Reference the existing Key Pair here
   key_name = var.key_name
@@ -84,15 +83,11 @@ resource "aws_instance" "airflow_server" {
   # Attach the security group defined above
   vpc_security_group_ids = [aws_security_group.airflow_sg.id]
 
-  # Disable unattended-upgrades so cloud-init finishes fast and SSH is
-  # available almost immediately for Ansible to connect without apt lock errors.
+  # No provisioning here — Ansible handles setup after the instance boots.
+  # user_data is left minimal so cloud-init finishes fast and SSH is
+  # available almost immediately for Ansible to connect.
   user_data = <<-EOF
 #!/bin/bash
-# Disable background apt updates to prevent playbook locks
-systemctl stop apt-daily.timer apt-daily-upgrade.timer unattended-upgrades.service
-systemctl disable apt-daily.timer apt-daily-upgrade.timer unattended-upgrades.service
-systemctl mask apt-daily.service apt-daily-upgrade.service unattended-upgrades.service
-
 exec > /var/log/user-data.log 2>&1
 set -ex
 echo "=== cloud-init boot complete, ready for Ansible at $(date -u) ==="
@@ -102,7 +97,6 @@ EOF
     Name = "Airflow-K3s-Server"
   }
 }
-
 
 output "public_ip" {
   description = "Public IP of the Airflow EC2 instance"

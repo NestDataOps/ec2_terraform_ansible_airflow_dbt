@@ -17,31 +17,16 @@
     airflow_aws_secret_access_key: "{{ lookup('env', 'AIRFLOW_AWS_SECRET_ACCESS_KEY') }}"
 
   tasks:
-    - name: Create a 2GB swap file to prevent OOM kills on small instances
-      command: "{{ item }}"
-      loop:
-        - fallocate -l 2G /swapfile
-        - chmod 600 /swapfile
-        - mkswap /swapfile
-        - swapon /swapfile
-      args:
-        creates: /swapfile
-      become: true
-
     - name: Install system dependencies
       apt:
         name:
           - python3-pip
           - python3-venv
           - sqlite3
+          - git
           - acl # required for become_user to work correctly on Linux targets
         update_cache: true
         state: present
-      register: apt_output
-  
-    - name: Show verbose apt installation details
-      debug:
-        var: apt_output
 
     - name: Create dedicated airflow user
       user:
@@ -56,41 +41,41 @@
         owner: airflow
         group: airflow
 
-  #  - name: Clone the DAGs/dbt repo
-  #    git:
-  #      repo: https://github.com/NestDataOps/airflow-dbt-snowflake-japan-visa.git
-  #      dest: "{{ airflow_home }}/repo"
-  #      force: true
-  #    become_user: airflow
+    - name: Clone the DAGs/dbt repo
+      git:
+        repo: https://github.com/NestDataOps/airflow-dbt-snowflake-japan-visa.git
+        dest: "{{ airflow_home }}/repo"
+        force: true
+      become_user: airflow
 
-  #  - name: Mark repo as a safe directory for the airflow user
-  #    command: git config --global --add safe.directory {{ airflow_home }}/repo
-  #    become_user: airflow
-  #    changed_when: false
+    - name: Mark repo as a safe directory for the airflow user
+      command: git config --global --add safe.directory {{ airflow_home }}/repo
+      become_user: airflow
+      changed_when: false
 
-  #  - name: Remove any pre-existing dags/dbt paths before symlinking
-  #    file:
-  #      path: "{{ item }}"
-  #      state: absent
-  #    loop:
-  #      - "{{ airflow_home }}/dags"
-  #      - "{{ airflow_home }}/japan_visa_dbt"
+    - name: Remove any pre-existing dags/dbt paths before symlinking
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ airflow_home }}/dags"
+        - "{{ airflow_home }}/japan_visa_dbt"
 
-  #  - name: Symlink dags directory from repo
-  #    file:
-  #      src: "{{ airflow_home }}/repo/dags"
-  #      dest: "{{ airflow_home }}/dags"
-  #      state: link
-  #      owner: airflow
-  #      group: airflow
+    - name: Symlink dags directory from repo
+      file:
+        src: "{{ airflow_home }}/repo/dags"
+        dest: "{{ airflow_home }}/dags"
+        state: link
+        owner: airflow
+        group: airflow
 
-  #  - name: Symlink japan_visa_dbt directory from repo
-  #    file:
-  #      src: "{{ airflow_home }}/repo/japan_visa_dbt"
-  #      dest: "{{ airflow_home }}/japan_visa_dbt"
-  #      state: link
-  #      owner: airflow
-  #      group: airflow
+    - name: Symlink japan_visa_dbt directory from repo
+      file:
+        src: "{{ airflow_home }}/repo/japan_visa_dbt"
+        dest: "{{ airflow_home }}/japan_visa_dbt"
+        state: link
+        owner: airflow
+        group: airflow
 
     - name: Create Python virtual environment
       command: python3 -m venv {{ airflow_home }}/airflow_env

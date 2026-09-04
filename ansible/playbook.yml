@@ -17,12 +17,6 @@
     airflow_aws_secret_access_key: "{{ lookup('env', 'AIRFLOW_AWS_SECRET_ACCESS_KEY') }}"
 
   tasks:
-    - name: Wait for cloud-init to complete
-      command: cloud-init status --wait
-      changed_when: false
-      retries: 3
-      delay: 5
-
     - name: Install system dependencies
       apt:
         name:
@@ -44,6 +38,42 @@
       file:
         path: "{{ airflow_home }}"
         state: directory
+        owner: airflow
+        group: airflow
+
+    - name: Clone the DAGs/dbt repo
+      git:
+        repo: https://github.com/NestDataOps/airflow-dbt-snowflake-japan-visa.git
+        dest: "{{ airflow_home }}/repo"
+        force: true
+      become_user: airflow
+
+    - name: Mark repo as a safe directory for the airflow user
+      command: git config --global --add safe.directory {{ airflow_home }}/repo
+      become_user: airflow
+      changed_when: false
+
+    - name: Remove any pre-existing dags/dbt paths before symlinking
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ airflow_home }}/dags"
+        - "{{ airflow_home }}/japan_visa_dbt"
+
+    - name: Symlink dags directory from repo
+      file:
+        src: "{{ airflow_home }}/repo/dags"
+        dest: "{{ airflow_home }}/dags"
+        state: link
+        owner: airflow
+        group: airflow
+
+    - name: Symlink japan_visa_dbt directory from repo
+      file:
+        src: "{{ airflow_home }}/repo/japan_visa_dbt"
+        dest: "{{ airflow_home }}/japan_visa_dbt"
+        state: link
         owner: airflow
         group: airflow
 

@@ -17,6 +17,13 @@
     airflow_aws_secret_access_key: "{{ lookup('env', 'AIRFLOW_AWS_SECRET_ACCESS_KEY') }}"
 
   tasks:
+    - name: Force archive.ubuntu.com mirrors
+      become: true
+      shell: |
+        sed -i 's|http://[^ ]*archive\.ubuntu\.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || true
+        sed -i 's|https://[^ ]*archive\.ubuntu\.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || true
+      changed_when: false
+
     - name: Install system dependencies
       apt:
         name:

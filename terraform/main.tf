@@ -90,6 +90,9 @@ resource "aws_instance" "airflow_server" {
 #!/bin/bash
 exec > /var/log/user-data.log 2>&1
 set -ex
+systemctl stop apt-daily.service apt-daily-upgrade.service unattended-upgrades.service || true
+systemctl disable apt-daily.timer apt-daily-upgrade.timer unattended-upgrades.service || true
+systemctl mask unattended-upgrades.service || true
 echo "=== cloud-init boot complete, ready for Ansible at $(date -u) ==="
 EOF
 

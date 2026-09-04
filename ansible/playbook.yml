@@ -27,6 +27,7 @@
           - acl # required for become_user to work correctly on Linux targets
         update_cache: true
         state: present
+        lock_timeout: 300
 
     - name: Create dedicated airflow user
       user:

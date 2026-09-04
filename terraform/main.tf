@@ -8,6 +8,17 @@ terraform {
   }
 }
 
+# S3 Bucket for Processed Data
+resource "aws_s3_bucket" "processed_data" {
+  bucket = "eventdriven-pipeline-processed"
+}
+
+# Enable EventBridge to broadcast S3 object events
+resource "aws_s3_bucket_notification" "bucket_notification" {
+  bucket      = aws_s3_bucket.processed_data.id
+  eventbridge = true
+}
+
 variable "key_name" {
   description = "Name of the existing EC2 Key Pair in AWS"
   type        = string
@@ -103,3 +114,70 @@ output "public_ip" {
   value       = aws_instance.airflow_server.public_ip
 }
 
+data "archive_file" "lambda_zip" {
+  type        = "zip"
+  source_file = "lambda_function.py"
+  output_path = "lambda_function.zip"
+}
+
+resource "aws_iam_role" "lambda_exec" {
+  name = "airflow_trigger_lambda_role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_basic" {
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  role       = aws_iam_role.lambda_exec.name
+}
+
+resource "aws_lambda_function" "airflow_trigger" {
+  filename         = data.archive_file.lambda_zip.output_path
+  function_name    = "trigger-airflow-dag"
+  role             = aws_iam_role.lambda_exec.arn
+  handler          = "lambda_function.lambda_handler"
+  source_code_hash = data.archive_file.lambda_zip.output_base64sha256
+  runtime          = "python3.10"
+
+  environment {
+    variables = {
+      # Dynamically references the EC2 public IP and the Airflow Web UI port
+      AIRFLOW_URL  = "http://${aws_instance.airflow_server.public_ip}:8080"
+      DAG_ID       = "s3_to_snowflake_dbt"
+      AIRFLOW_USER = "admin"
+      AIRFLOW_PASS = "admin"
+    }
+  }
+}
+
+resource "aws_cloudwatch_event_rule" "s3_upload" {
+  name        = "capture-s3-parquet-upload"
+  description = "Trigger on Object Created in processed bucket"
+  event_pattern = jsonencode({
+    source      = ["aws.s3"]
+    detail-type = ["Object Created"]
+    detail = {
+      bucket = { name = [aws_s3_bucket.processed_data.id] }
+    }
+  })
+}
+
+resource "aws_cloudwatch_event_target" "lambda_target" {
+  rule      = aws_cloudwatch_event_rule.s3_upload.name
+  target_id = "TriggerAirflowLambda"
+  arn       = aws_lambda_function.airflow_trigger.arn
+}
+
+resource "aws_lambda_permission" "allow_eventbridge" {
+  statement_id  = "AllowExecutionFromEventBridge"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.airflow_trigger.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.s3_upload.arn
+}

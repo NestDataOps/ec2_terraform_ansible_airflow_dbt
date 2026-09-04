@@ -1,0 +1,13 @@
+version: 2
+
+sources:
+  - name: raw
+    database: EVENTDRIVEN_PIPELINE_DB
+    schema: RAW
+    tables:
+      - name: raw_events
+        description: "Landing table loaded by Airflow's COPY INTO from the processed S3 stage"
+        columns:
+          - name: event_id
+            tests:
+              - not_null

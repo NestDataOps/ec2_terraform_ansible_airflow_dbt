@@ -1,0 +1,13 @@
+version: 2
+
+models:
+  - name: stg_events
+    description: "Typed, flattened view over raw_events"
+    columns:
+      - name: event_id
+        tests:
+          - unique
+          - not_null
+      - name: event_type
+        tests:
+          - not_null

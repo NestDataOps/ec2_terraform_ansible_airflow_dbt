@@ -47,14 +47,6 @@
         owner: airflow
         group: airflow
 
-    - name: Copy local DAGs and dbt directories to EC2
-      copy:
-        src: ../airflow/
-        dest: "{{ airflow_home }}/"
-        owner: airflow
-        group: airflow
-        mode: "0755"
-
     - name: Create Python virtual environment
       command: python3 -m venv {{ airflow_home }}/airflow_env
       args:

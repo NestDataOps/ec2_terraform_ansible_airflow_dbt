@@ -75,7 +75,7 @@ resource "aws_security_group" "airflow_sg" {
 resource "aws_instance" "airflow_server" {
   # Ubuntu 22.04 LTS (Make sure to update this AMI ID for your specific AWS region)
   ami           = "ami-0c7217cdde317cfec"
-  instance_type = "t3a.small"
+  instance_type = "t3a.medium"
 
   # Reference the existing Key Pair here
   key_name = var.key_name

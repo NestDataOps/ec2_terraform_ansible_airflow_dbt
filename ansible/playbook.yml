@@ -17,6 +17,17 @@
     airflow_aws_secret_access_key: "{{ lookup('env', 'AIRFLOW_AWS_SECRET_ACCESS_KEY') }}"
 
   tasks:
+    - name: Create a 2GB swap file to prevent OOM kills on small instances
+      command: "{{ item }}"
+      loop:
+        - fallocate -l 2G /swapfile
+        - chmod 600 /swapfile
+        - mkswap /swapfile
+        - swapon /swapfile
+      args:
+        creates: /swapfile
+      become: true
+
     - name: Install system dependencies
       apt:
         name:

@@ -26,6 +26,11 @@
           - acl # required for become_user to work correctly on Linux targets
         update_cache: true
         state: present
+      register: apt_output
+  
+    - name: Show verbose apt installation details
+      debug:
+        var: apt_output
 
     - name: Create dedicated airflow user
       user:

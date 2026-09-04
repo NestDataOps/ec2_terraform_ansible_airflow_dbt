@@ -84,11 +84,15 @@ resource "aws_instance" "airflow_server" {
   # Attach the security group defined above
   vpc_security_group_ids = [aws_security_group.airflow_sg.id]
 
-  # No provisioning here — Ansible handles setup after the instance boots.
-  # user_data is left minimal so cloud-init finishes fast and SSH is
-  # available almost immediately for Ansible to connect.
+  # Disable unattended-upgrades so cloud-init finishes fast and SSH is
+  # available almost immediately for Ansible to connect without apt lock errors.
   user_data = <<-EOF
 #!/bin/bash
+# Disable background apt updates to prevent playbook locks
+systemctl stop apt-daily.timer apt-daily-upgrade.timer unattended-upgrades.service
+systemctl disable apt-daily.timer apt-daily-upgrade.timer unattended-upgrades.service
+systemctl mask apt-daily.service apt-daily-upgrade.service unattended-upgrades.service
+
 exec > /var/log/user-data.log 2>&1
 set -ex
 echo "=== cloud-init boot complete, ready for Ansible at $(date -u) ==="
@@ -98,6 +102,7 @@ EOF
     Name = "Airflow-K3s-Server"
   }
 }
+
 
 output "public_ip" {
   description = "Public IP of the Airflow EC2 instance"
